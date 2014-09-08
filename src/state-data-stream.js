@@ -3,9 +3,10 @@
 angular.module('StateDataStream', [])
     .service('StateDataStream', function($q) {
 
-		var fnQueue = [];
-
 		var StateDataStream = function(state) {
+
+			var fnQueue = [];
+
 			this.addDataRetriever = function addDataRetriver(key, fn) {
 				var fnToQueue = function(state) {
 					return fn.then(function(res) {
