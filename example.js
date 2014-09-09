@@ -1,55 +1,83 @@
 'use strict';
 
 angular.module('statedatastreamApp')
-	.controller('MainCtrl', function ($scope, StateDataStream, $q) {
-		// For simulation
-		var dummyP = $q.defer();
-		var dummyP2 = $q.defer();
-		var dummyP3 = $q.defer();
 
-		// Example StateDataStream showing
-		// how one can define what to do and in
-		// what order.
-		var getData = StateDataStream.create({})
-			.then(function(state) {
-				console.log(1);
-				console.log(JSON.stringify(state));
-			})
-			.addDataRetriever('test1', dummyP.promise)
-			.then(function(state) {
-				console.log(2);
-				console.log(JSON.stringify(state));
-			})
-			.addDataRetriever('test2', dummyP2.promise)
-			.then(function(state) {
-				console.log(3);
-				console.log(JSON.stringify(state));
-			})
-			.addAsyncDataRetrievers({
-				'test3': dummyP3.promise, 
-				'test4': dummyP.promise
-			})
-			.then(function(state) {
-				console.log(4);
-				console.log(JSON.stringify(state));
-			})
-			.addDataRetriever('test5', dummyP2.promise);
+	.service('Api', function($http) {
+		this.getRepos = function(username) {
+			return $http.get('https://api.github.com/users/'+username+'/repos');
+		};
+		
+		this.getWeather = function(city) {
+			return $http.get('http://api.openweathermap.org/data/2.5/weather?q='+city);
+		};
 
-		// Execute the defined StateDataStream and
-		// run a callback.
-		getData.execute(function(state) {
-			console.log(5);
-			console.log(JSON.stringify(state));
-		});
+		this.listAgencies = function(query) {
+			return $http.jsonp('http://govdata.se/api/lista?jsonp=JSON_CALLBACK');
+		}
 
-		// ========= Simulation code
+		this.getReposLazy = function(username) {
+			return function() {
+				return $http.get('https://api.github.com/users/'+username+'/repos');
+			}
+		};
+		
+		this.getWeatherLazy = function(city) {
+			return function() {
+				return $http.get('http://api.openweathermap.org/data/2.5/weather?q='+city);
+			};
+		};
+
+		this.listAgenciesLazy = function() {
+			return function() {
+				return $http.jsonp('http://govdata.se/api/lista?jsonp=JSON_CALLBACK');
+			};
+		}
+	})
+
+	.controller('MainCtrl', function ($scope, StateDataStream, $q, Api) {
+		// Example of a state data stream. Note how more and more data is loaded
+		// into the state.
+		StateDataStream.create({})
+			.addDataRetriever('weatherGlasgow', Api.getWeather('Glasgow'))
+			.then(function(state) {
+				console.log(
+					'While waiting you should know that in Glasgow the ' + 
+						state.weatherGlasgow.data.weather[0].description.toLowerCase()
+				);
+			})
+			.addLazyDataRetriever('repos', Api.getReposLazy('petercrona'))
+			.addDataRetrievers({
+				'weatherParis': Api.getWeather('Paris'),
+				'weatherLima': Api.getWeather('Lima')
+			})
+			.addLazyDataRetriever('swedishAgencies', Api.listAgenciesLazy())
+			.addStDataRetriever('weatherGothenburg', function(state) {
+				var city = state.swedishAgencies.data[13][1].substring(0,8);
+				return Api.getWeather(city);
+			})
+			.execute(function(state) {
+				console.log(state);
+			});
+
+		
+		// Another example only using lazy data retrievers
+		// Note that no requests are sent until execute is called.
+		var lazyDataLoader = StateDataStream.create({})
+			.addLazyDataRetriever('weatherGlasgow', Api.getWeatherLazy('Glasgow'))
+			.addLazyDataRetriever('repos', Api.getReposLazy('petercrona'))
+
 		setTimeout(function() {
-			dummyP.resolve('foo1');
+			lazyDataLoader.execute(function(state) {
+				console.log(state);
+			});
 		}, 2000);
-		setTimeout(function() {
-			dummyP2.resolve('foo2');
-		}, 100);
-		setTimeout(function() {
-			dummyP3.resolve('foo3');
-		}, 5000);
+
+		// A pretty normal example showing the clarity which can be achieved using
+		// state data streams.
+		StateDataStream.create({})
+			.addDataRetriever('swedishAgencies', Api.listAgencies())
+			.addDataRetriever('myRepos', Api.getRepos('petercrona'))
+			.execute(function(state) {
+				console.log(state);
+			});
 	});

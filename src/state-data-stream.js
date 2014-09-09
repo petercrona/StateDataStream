@@ -7,6 +7,9 @@ angular.module('StateDataStream', [])
 
 			var fnQueue = [];
 
+			/*
+			 * Binds the result of a promise to the state.
+			 */
 			this.addDataRetriever = function addDataRetriver(key, fn) {
 				var fnToQueue = function(state) {
 					return fn.then(function(res) {
@@ -22,7 +25,50 @@ angular.module('StateDataStream', [])
 				return this;
 			};
 
-			this.addAsyncDataRetrievers = function addDataRetrievers(retrievers) {
+			/*
+			 * Calls the provided function with the current state
+			 * and expects a promise back. The result of the resolved
+			 * promise is written to the state. 
+			 */
+			this.addStDataRetriever = function addStDataRetriver(key, fn) {
+				var fnToQueue = function(state) {
+					return fn(state).then(function(res) {
+						state[key] = res;
+						return state;
+					});
+				};
+				fnQueue.push({
+					type: 'sync',
+					fn: fnToQueue
+				});
+				
+				return this;
+			};
+
+			/**
+			 * Add a data retriever wrapped in a function. Since it is wrapped
+			 * in a function the inner won't run until it's turn in the
+			 * state data stream sequence.
+			 */
+			this.addLazyDataRetriever = function addStDataRetriver(key, fn) {
+				var fnToQueue = function(state) {
+					return fn().then(function(res) {
+						state[key] = res;
+						return state;
+					});
+				};
+				fnQueue.push({
+					type: 'sync',
+					fn: fnToQueue
+				});
+				
+				return this;
+			};
+
+			/**
+			 * Add multiple data retrievers at once.
+			 */
+			this.addDataRetrievers = function addDataRetrievers(retrievers) {
 				var promises = [];
 				var keys = [];
 
@@ -48,6 +94,9 @@ angular.module('StateDataStream', [])
 				return this;
 			};
 
+			/**
+			 * Add a function which is called with the current state.
+			 */
 			this.then = function then(fn) {
 				var fnToQueue = function(state) {
 					fn(state);
@@ -61,6 +110,9 @@ angular.module('StateDataStream', [])
 				return this;
 			};
 
+			/**
+			 * Execute the state data stream.
+			 */
 			this.execute = function execute(fn) {
 				fn = fn || angular.identity;
 
@@ -83,6 +135,9 @@ angular.module('StateDataStream', [])
 			
 		}
 
+		/**
+		 * Create a new state data stream.
+		 */
 		this.create = function create(initialState) {
 			return new StateDataStream(initialState);
 		}
