@@ -1,0 +1,23 @@
+{
+  "name": "StateDataStream",
+  "version": "0.8.0",
+  "homepage": "https://github.com/petercrona/StateDataStream",
+  "main": "src/state-data-stream.js",
+  "authors": [
+    "petercrona89@gmail.com"
+  ],
+  "description": "Tool for chaining promises and other functions together.",
+  "keywords": [
+    "promises",
+    "chaining"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "app/bower_components",
+    "test",
+    "tests"
+  ]
+}
