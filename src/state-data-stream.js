@@ -6,6 +6,7 @@ angular.module('StateDataStream', [])
 		var StateDataStream = function(state) {
 
 			var fnQueue = [];
+			var errHandler = angular.identity;
 
 			/*
 			 * Binds the result of a promise to the state.
@@ -110,6 +111,12 @@ angular.module('StateDataStream', [])
 				return this;
 			};
 
+			this.error = function(fn) {
+				errHandler = fn;
+				
+				return this;
+			};
+
 			/**
 			 * Execute the state data stream.
 			 */
@@ -117,23 +124,43 @@ angular.module('StateDataStream', [])
 				fn = fn || angular.identity;
 
 				var currTask = $q.when(state);
+				var error = [];
+				
 				angular.forEach(fnQueue, function(task) {
 					if (task.type === 'then') {
 						currTask = currTask.then(function(state) {
-							task.fn(state);
+							if (state !== 'FAILED') {
+								task.fn(state);
+							}
 							return state;
 						});
 					} else {
-						currTask = currTask.then(task.fn);
+						currTask = currTask
+							.then(function(state) {
+								if (state !== 'FAILED') {
+									return task.fn(state);
+								}
+								return state;
+							})
+							.catch(function(err) {
+								error.push(err);
+								return 'FAILED';
+							});
 					}
 				});
-
+				
+				// Call user's execute function
 				currTask.then(function(state) {
-					fn(state);
+					if (error.length === 0) {
+						fn(state);
+					} else {
+						errHandler(error, state);
+					}
 				});
+				
+				return this;
 			};
-			
-		}
+		};
 
 		/**
 		 * Create a new state data stream.
