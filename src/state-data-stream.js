@@ -30,7 +30,7 @@ angular.module('StateDataStream', [])
 			 * and expects a promise back. The result of the resolved
 			 * promise is written to the state. 
 			 */
-			this.addStDataRetriever = function addStDataRetriver(key, fn) {
+			this.addStateDataRetriever = function addStDataRetriver(key, fn) {
 				var fnToQueue = function(state) {
 					return fn(state).then(function(res) {
 						state[key] = res;

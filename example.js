@@ -51,7 +51,7 @@ angular.module('statedatastreamApp')
 				'weatherLima': Api.getWeather('Lima')
 			})
 			.addLazyDataRetriever('swedishAgencies', Api.listAgenciesLazy())
-			.addStDataRetriever('weatherGothenburg', function(state) {
+			.addStateDataRetriever('weatherGothenburg', function(state) {
 				var city = state.swedishAgencies.data[13][1].substring(0,8);
 				return Api.getWeather(city);
 			})
