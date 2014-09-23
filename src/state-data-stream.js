@@ -8,6 +8,19 @@ angular.module('StateDataStream', [])
 			var fnQueue = [];
 			var errHandler = angular.identity;
 
+			this.write = function write(key, data) {
+				var fnToQueue = function(state) {
+					state[key] = data;
+					return state;
+				};
+				fnQueue.push({
+					type: 'then',
+					fn: fnToQueue
+				});
+				
+				return this;
+			};
+
 			/*
 			 * Binds the result of a promise to the state.
 			 */
@@ -95,6 +108,18 @@ angular.module('StateDataStream', [])
 				return this;
 			};
 
+			this._getFnQueue = function _getFnQueue() {
+				return fnQueue;
+			};
+
+			this._setFnQueue = function _setFnQueue(newFnQueue) {
+				fnQueue = newFnQueue;
+			};
+
+			this._setState = function _setState(newState) {
+				state = newState;
+			};
+
 			/**
 			 * Add a function which is called with the current state.
 			 */
@@ -111,7 +136,17 @@ angular.module('StateDataStream', [])
 				return this;
 			};
 
-			this.error = function(fn) {
+			this.compose = function compose(stream) {
+				var cFnQueue = fnQueue.concat(stream._getFnQueue());
+				
+				var cStream = new StateDataStream();
+				cStream._setState(JSON.parse(JSON.stringify(state)));
+				cStream._setFnQueue(cFnQueue);
+
+				return cStream;
+			}
+				
+			this.error = function error(fn) {
 				errHandler = fn;
 				
 				return this;
