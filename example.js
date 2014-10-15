@@ -3,6 +3,9 @@
 angular.module('statedatastreamApp')
 
 	.service('Api', function($http) {
+
+		// Dummy API with some open APIs found on the Internet.
+
 		this.getRepos = function(username) {
 			return $http.get('https://api.github.com/users/'+username+'/repos');
 		};
@@ -35,7 +38,7 @@ angular.module('statedatastreamApp')
 	})
 
 	.controller('MainCtrl', function ($scope, StateDataStream, $q, Api) {
-
+		/*
 		// Example of a state data stream. Note how more and more data is loaded
 		// into the state.
 		StateDataStream.create({})
@@ -74,24 +77,25 @@ angular.module('statedatastreamApp')
 		var lazyDataLoader = StateDataStream.create({})
 			.addLazyDataRetriever('weatherGlasgow', Api.getWeatherLazy('Glasgow'))
 			.addLazyDataRetriever('repos', Api.getReposLazy('petercrona'))
-			.addLazyDataRetriever('weatherGlasgow', Api.getWeatherLazy('Glasgow'))
+			.addLazyDataRetriever('weatherGlasgowForSure', Api.getWeatherLazy('Glasgow'))
 			.error(function(err) {
 				console.log(err);
 				console.log('FAILED 2');
 			});
 
+		/*
 		setTimeout(function() {
 			lazyDataLoader.execute(function(state) {
 				console.log(state);
 			});
-		}, 2000);
+		}, 2000);*/
 
 
 		/* ================================================
 		 * ================================================
 		 */		
 
-
+/*
 		// A pretty normal example showing the clarity which can be achieved using
 		// state data streams.
 		var loadWeather = StateDataStream.create({})
@@ -121,16 +125,15 @@ angular.module('statedatastreamApp')
 		 * ================================================
 		 */
 
-
 		// Get weather using lazy data retrievers.
 		var loadWeatherLazy = StateDataStream.create({})
-			.addLazyDataRetriever('repos', Api.getReposLazy('petercrona'))
 			.addLazyDataRetriever('gothenburgWeather', Api.getWeatherLazy('Göteborg'))
 			.addLazyDataRetriever('glasgowWeather', Api.getWeatherLazy('Glasgow'))
 			.error(function(err, state) {
 				console.log('Fail');
 			});
 		
+		/*
 		// Will execute the loadWeatherLazy stream.
 		loadWeatherLazy.execute(function(state) {
 			console.log('Success');
@@ -142,6 +145,14 @@ angular.module('statedatastreamApp')
 		loadWeatherLazy.execute(function(state) {
 			console.log('Execute again');
 			console.log(state);
-		});
+		});*/
+
+		loadWeatherLazy
+			.compose(lazyDataLoader)
+			.write('fisk', 'kråka')
+			.execute(function(state) {
+				console.log('Execute again');
+				console.log(state);
+			});
 
 	});
