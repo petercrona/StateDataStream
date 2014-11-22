@@ -5,7 +5,7 @@ angular.module('statedatastreamApp')
 	.controller('MainCtrl', function ($scope, Sds, Api, Helper) {
 		Sds.init()
 		
-		    // Write stuff to stream
+			// Write stuff to stream
 			.write('repos.peter', Api.getRepos('petercrona'))
 			.write('repos.bambu', Api.getRepos('bumbu'))
 			.write('repos.ariutta', Api.getRepos('ariutta'))
@@ -13,7 +13,7 @@ angular.module('statedatastreamApp')
 			.write('repos.freescale', Api.getRepos('Freescale'))
 			.write('snapshotOfState[]', Helper.stateCopyFn)
 
-		    // Attach handlers to stream
+			// Attach handlers to stream
 			.error(function(err, state) {
 				console.log('error', err, state);
 			})
@@ -22,10 +22,8 @@ angular.module('statedatastreamApp')
 			});
 	})
 
+	// Dummy API with some open APIs found on the Internet.
 	.service('Api', function($http) {
-
-		// Dummy API with some open APIs found on the Internet.
-
 		this.getRepos = function(username) {
 			return $http.get('https://api.github.com/users/'+username+'/repos');
 		};
