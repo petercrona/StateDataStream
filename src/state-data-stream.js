@@ -1,7 +1,7 @@
 'use strict';
 
 angular.module('StateDataStream', [])
-    .service('StateDataStream', function($q) {
+    .factory('Sds', function($q) {
 
 		/**
 		 * Obj to represent a job in the queue
