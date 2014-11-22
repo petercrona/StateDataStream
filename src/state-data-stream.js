@@ -3,205 +3,258 @@
 angular.module('StateDataStream', [])
     .service('StateDataStream', function($q) {
 
-		var StateDataStream = function(state) {
-
-			var fnQueue = [];
-			var errHandler = angular.identity;
-
-			this.write = function write(key, data) {
-				var fnToQueue = function(state) {
-					state[key] = data;
-					return state;
-				};
-				fnQueue.push({
-					type: 'then',
-					fn: fnToQueue
-				});
-				
-				return this;
-			};
-
-			/*
-			 * Binds the result of a promise to the state.
-			 */
-			this.addDataRetriever = function addDataRetriver(key, fn) {
-				var fnToQueue = function(state) {
-					return fn.then(function(res) {
-						state[key] = res;
-						return state;
-					});
-				};
-				fnQueue.push({
-					type: 'sync',
-					fn: fnToQueue
-				});
-				
-				return this;
-			};
-
-			/*
-			 * Calls the provided function with the current state
-			 * and expects a promise back. The result of the resolved
-			 * promise is written to the state. 
-			 */
-			this.addStateDataRetriever = function addStDataRetriver(key, fn) {
-				var fnToQueue = function(state) {
-					return fn(state).then(function(res) {
-						state[key] = res;
-						return state;
-					});
-				};
-				fnQueue.push({
-					type: 'sync',
-					fn: fnToQueue
-				});
-				
-				return this;
-			};
-
-			/**
-			 * Add a data retriever wrapped in a function. Since it is wrapped
-			 * in a function the inner won't run until it's turn in the
-			 * state data stream sequence.
-			 */
-			this.addLazyDataRetriever = function addStDataRetriver(key, fn) {
-				var fnToQueue = function(state) {
-					return fn().then(function(res) {
-						state[key] = res;
-						return state;
-					});
-				};
-				fnQueue.push({
-					type: 'sync',
-					fn: fnToQueue
-				});
-				
-				return this;
-			};
-
-			/**
-			 * Add multiple data retrievers at once.
-			 */
-			this.addDataRetrievers = function addDataRetrievers(retrievers) {
-				var promises = [];
-				var keys = [];
-
-				angular.forEach(retrievers, function(value, key) {
-					promises.push(value);
-					keys.push(key);
-				});
-
-				var fnToQueue = function(state) {
-					return $q.all(promises)
-						.then(function(res) {
-							angular.forEach(res, function(value, i) {
-								state[keys[i]] = value;
-							});
-							return state;
-						});
-				};
-				fnQueue.push({
-					type: 'async',
-					fn: fnToQueue
-				});
-				
-				return this;
-			};
-
-			this._getFnQueue = function _getFnQueue() {
-				return fnQueue;
-			};
-
-			this._setFnQueue = function _setFnQueue(newFnQueue) {
-				fnQueue = newFnQueue;
-			};
-
-			this._setState = function _setState(newState) {
-				state = newState;
-			};
-
-			/**
-			 * Add a function which is called with the current state.
-			 */
-			this.then = function then(fn) {
-				var fnToQueue = function(state) {
-					fn(state);
-					return state;
-				};
-				fnQueue.push({
-					type: 'then',
-					fn: fnToQueue
-				});
-
-				return this;
-			};
-
-			this.compose = function compose(stream) {
-				var cFnQueue = fnQueue.concat(stream._getFnQueue());
-				
-				var cStream = new StateDataStream();
-				cStream._setState(JSON.parse(JSON.stringify(state)));
-				cStream._setFnQueue(cFnQueue);
-
-				return cStream;
-			}
-				
-			this.error = function error(fn) {
-				errHandler = fn;
-				
-				return this;
-			};
-
-			/**
-			 * Execute the state data stream.
-			 */
-			this.execute = function execute(fn) {
-				fn = fn || angular.identity;
-
-				var currTask = $q.when(state);
-				var error = [];
-				
-				angular.forEach(fnQueue, function(task) {
-					if (task.type === 'then') {
-						currTask = currTask.then(function(state) {
-							if (state !== 'FAILED') {
-								task.fn(state);
-							}
-							return state;
-						});
-					} else {
-						currTask = currTask
-							.then(function(state) {
-								if (state !== 'FAILED') {
-									return task.fn(state);
-								}
-								return state;
-							})
-							.catch(function(err) {
-								error.push(err);
-								return 'FAILED';
-							});
-					}
-				});
-				
-				// Call user's execute function
-				currTask.then(function(state) {
-					if (error.length === 0) {
-						fn(state);
-					} else {
-						errHandler(error, state);
-					}
-				});
-				
-				return this;
-			};
+		/**
+		 * Obj to represent a job in the queue
+		 */
+		var Job = function(keyObj, type, value) {
+			this.keyObj = keyObj;
+			this.type = type;
+			this.value = value;
 		};
 
 		/**
-		 * Create a new state data stream.
+		 * Obj to represent parsed key
 		 */
-		this.create = function create(initialState) {
-			return new StateDataStream(initialState);
+		var KeyObj = function(type, path) {
+			this.type = type;
+			this.path = path;
+		};
+
+		/**
+		 * Represents space in the state.
+		 * It's just a pointer to the position
+		 * where the user wanted his/her data.
+		 */
+		var Space = function(type, varRef, key) {
+			this.set = function(value) {
+				if (type === 'list') {
+					varRef[key].push(value);
+				} else {
+					varRef[key] = value;
+				}
+			};
+		};
+
+		// ====== Constructor
+		var Cq = function(initialState) {
+			this._initialState = initialState;
+			this._jobQueue = [];
+			this._errorHandler = angular.identity;
+		};
+
+		// ====== Methods
+		Cq.prototype.write = function(key, val) {
+			// Call the appropriate handler
+			if (isPromise(val)) {
+				writePromise(this, key, val);
+			} else if (isFunction(val)) {
+				writeFunction(this, key, val);
+			} else {
+				writeValue(this, key, val);
+			}
+
+			return this;
+		};
+		
+		/**
+		 * Register errorhandler, immediately called if any promise
+		 * fail. Called with (error, state).
+		 */
+		Cq.prototype.error = function(errorHandler) {
+			this._errorHandler = errorHandler;
+			return this;
+		};
+
+		/**
+		 * Execute the stream and call the successHandler with the state.
+		 */
+		Cq.prototype.execute = function(successHandler) {
+			// Not that we want a copy of inital state, to make it possible to rerun
+			// the Cq.
+			var state = JSON.parse(JSON.stringify(this._initialState));
+			var jobs = this._jobQueue;
+
+			// We use a chain of promises to make everything evaluate
+			// in order.
+			var promiseChain = $q.when(state);
+			
+			for (var i in jobs) {
+				var job = jobs[i];
+				var promise = null;
+				
+				if (job.type === 'promise') {
+					promise = createPromisePromise(job.keyObj, job.value);
+				} else if (job.type === 'function') {
+					promise = createFunctionPromise(job.keyObj, job.value);
+				} else if (job.type === 'value') {
+					promise = createValuePromise(job.keyObj, job.value);
+				}
+
+				promiseChain = promiseChain.then(promise);
+			}
+
+			promiseChain
+				.then(successHandler)
+				.catch(function(err) {
+					this._errorHandler(err, state);
+				}.bind(this));
+
+			return this;
+		};
+
+		// ====== Internal methods
+		
+		/**
+		 * Create a new Stream.
+		 */
+		function initFn(initialState) {
+			if (initialState === undefined) {
+				initialState = {};
+			}
+			return new Cq(initialState);
 		}
+
+		/**
+		 * Add promise's resolve value to state.
+		 */
+		function createPromisePromise(keyObj, promise) {
+			return function(state) {
+				return promise.then(function(res) {
+					var space = allocateSpace(state, keyObj);
+					space.set(res);
+					return state;
+				});
+			};
+		}
+
+		/**
+		 * Add the function's resolve value to state.
+		 * Note that the function might return a
+		 * promise. In that case, add this promise's
+		 * resolve value to the state.
+		 */
+		function createFunctionPromise(keyObj, fn) {
+			return function(state) {
+				var retr = fn(state);
+				if (isPromise(retr)) {
+					return retr.then(function(res) {
+						var space = allocateSpace(state, keyObj);
+						space.set(res);
+						return state;
+					});
+				} else {
+					var space = allocateSpace(state, keyObj);
+					space.set(retr);
+					return state;
+				}
+			};
+		}
+
+		/**
+		 * Simple value assignment in the stream.
+		 */
+		function createValuePromise(keyObj, value) {
+			return function(state) {
+				var space = allocateSpace(state, keyObj);
+				space.set(value);
+				return state;
+			};
+		}
+
+		function writePromise(cq, key, val) {
+			var keyObj = parseKey(key);
+			cq._jobQueue.push(new Job(keyObj, 'promise', val));
+		}
+
+		function writeFunction(cq, key, val) {
+			var keyObj = parseKey(key);
+			cq._jobQueue.push(new Job(keyObj, 'function', val));
+		}
+
+		function writeValue(cq, key, val) {
+			var keyObj = parseKey(key);
+			cq._jobQueue.push(new Job(keyObj, 'value', val));
+		}
+
+		/**
+		 * Parse the key to determine where
+		 * the user wants to store data.
+		 */
+		function parseKey(key) {	
+			var keyObj = null;
+			if (isListKey(key)) {
+				keyObj = parseListKey(key);
+			} else {
+				keyObj = parseObjKey(key);
+			}
+			return keyObj;
+		}
+
+		function getPathFromListKey(key) {
+			var tKey = key
+				.substring(0,key.length-2);
+			return getPathFromKey(tKey);
+		}
+
+		function getPathFromKey(key) {
+			return key
+				.split('.');
+		}
+
+		function parseListKey(key) {
+			var path = getPathFromListKey(key);
+			return new KeyObj('list', path);
+		}
+
+		function parseObjKey(key) {
+			var path = getPathFromKey(key);
+			return new KeyObj('object', path);
+		}
+
+		/**
+		 * Allocate space where the user wants
+		 * to store data.
+		 */
+		function allocateSpace(state, keyObj) {
+			var currP = state;
+			
+			for (var i in keyObj.path) {
+				var edge = keyObj.path[i];
+				// Note that we don't create an object for the last level
+				// since we might want a list.
+				if (currP[edge] === undefined && i < keyObj.path.length-1) {
+					currP[edge] = {};
+				}
+				if (i < keyObj.path.length-1) {
+					currP = currP[edge];
+				}
+			}
+
+			var last = keyObj.path[keyObj.path.length-1];
+			if (keyObj.type === 'list' && currP[last] === undefined) {
+				currP[last] = [];
+			} else if (currP[last] === undefined) {
+				currP[last] = {};
+			}
+
+			return new Space(keyObj.type, currP, last);
+		}
+
+		function isPromise(val) {
+			return val !== null && val.then !== undefined;
+		}
+
+		function isFunction(val) {
+			return typeof val === 'function';
+		}
+
+		function isListKey(key) {
+			return key.indexOf('[]') !== -1;
+		}
+
+		// ======
+		return {
+			init: initFn,
+		};
 
 	});
