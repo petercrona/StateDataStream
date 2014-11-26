@@ -68,7 +68,7 @@ angular.module('StateDataStream', [])
 		/**
 		 * Execute the stream and call the successHandler with the state.
 		 */
-		Cq.prototype.execute = function(successHandler) {
+		Cq.prototype.execute = function(successHandler, stateDefinition) {
 			// Not that we want a copy of inital state, to make it possible to rerun
 			// the Cq.
 			var state = JSON.parse(JSON.stringify(this._initialState));
@@ -94,7 +94,9 @@ angular.module('StateDataStream', [])
 			}
 
 			promiseChain
-				.then(successHandler)
+				.then(function(state) {
+					successHandler.apply(null, getPartialState(state, stateDefinition))
+				})
 				.catch(function(err) {
 					this._errorHandler(err, state);
 				}.bind(this));
@@ -104,6 +106,51 @@ angular.module('StateDataStream', [])
 
 		// ====== Internal methods
 		
+		/**
+		 * Extract partial state from full state.
+		 * keys shall be a list of keys pointing to the
+		 * values to include in the partial state.
+		 */
+		function getPartialState(state, keys) {
+			if (keys === undefined) {
+				return [state];
+			}
+
+			var parsedKeys = [];
+			for(var i in keys) {
+				parsedKeys.push(parseKey(keys[i]));
+			}
+			
+			var values = map(parsedKeys, function(key) {
+				return getValueFromState(state, key);
+			});
+
+			return values;
+		}
+
+		function getValueFromState(state, key) {
+			var pathHead = key.path[0];
+			var pathTail = key.path.slice(1);
+			var currValue = state[pathHead];
+			
+			if (currValue === undefined) {
+				return undefined;
+			} else {
+				for(var i in pathTail) {
+					currValue = currValue[pathTail[i]];
+				}
+				return currValue;
+			}
+		}
+
+		function map(arr, fn) {
+			var res = [];
+			for(var i in arr) {
+				res.push(fn(arr[i]));
+			}
+			return res;
+		}
+
 		/**
 		 * Create a new Stream.
 		 */
